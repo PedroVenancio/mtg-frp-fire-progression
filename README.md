@@ -23,7 +23,7 @@ This script processes MTFRPPixel fire detection data to create temporal progress
 ### Prerequisites
 
 ```bash
-# Install Python dependencies
+# Install Python dependencies (shapely 2.x)
 pip install pandas geopandas shapely scikit-learn numpy
 ```
 
