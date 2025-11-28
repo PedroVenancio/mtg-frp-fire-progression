@@ -2,7 +2,7 @@
 
 Python script for create hourly and cumulative fire progression polygons from MTG (Meteosat Third Generation) FRP (Fire Radiative Power) data, with calibration against reference burned areas.
 
-https://github.com/user-attachments/assets/01cc1066-d61d-46ed-9d16-8720e77df491
+https://github.com/user-attachments/assets/198a031a-720d-4a23-9ee9-2cea6e173c95
 
 ## 📋 Description
 
