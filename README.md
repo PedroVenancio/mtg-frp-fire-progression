@@ -11,12 +11,13 @@ This script processes MTFRPPixel fire detection data to create temporal progress
 ## ✨ Features
 
 - **Dual Processing Modes**: Cumulative progression and hourly progression for analysis and animations
-- **Advanced Filtering**: FRP thresholding, spatial density filtering (DBSCAN), and cluster size filtering
+- **Non-Overlapping Progression**: Option for print layouts showing only new burned areas each hour
+- **Advanced Filtering**: FRP thresholding, spatial density filtering (DBSCAN), cluster size filtering and minimum area filtering
 - **Flexible Hull Generation**: Concave hull with fallback to convex hull
 - **Calibration System**: Automatic parameter calibration using reference burned areas
 - **Temporal Continuity**: Fill missing hours to maintain temporal (hourly) progression
 - **Area Correction**: Negative buffer (shrink) to mitigate area overestimation
-- **Multiple Outputs**: Cumulative and hourly polygons, daily summaries and calibrated versions
+- **Multiple Outputs**: Cumulative and hourly polygons, daily summaries, calibrated versions and non-overlapping progression
 
 ## 🛠️ Installation
 
@@ -48,6 +49,11 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix frp_fi
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix calibrated_frp_fires --reference_areas reference_burned_areas.gpkg
 ```
 
+**Process with non-overlapping progression (ideal for print layouts):**
+```bash
+python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix print_layout --non_overlapping
+```
+
 **Process only cumulative progression:**
 ```bash
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix cumulative_only --no_hourly
@@ -68,6 +74,23 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix tuned 
     --shrink_distance 40 \
     --frp_threshold_method adaptive \
     --frp_quantile_threshold 0.2
+```
+
+**Non-overlapping progression with custom minimum area:**
+```bash
+python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix clean_progression \
+    --non_overlapping \
+    --min_area_non_overlapping 1.0
+```
+
+**Complete workflow with calibration and non-overlapping output:**
+```bash
+python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix complete \
+    --non_overlapping \
+    --reference_areas reference_burned_areas.gpkg \
+    --min_area_non_overlapping 0.5 \
+    --buffer_distance 80 \
+    --shrink_distance 30
 ```
 
 **Skip calibration even with reference data:**
@@ -102,6 +125,10 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_fil
 - `--density_eps`: DBSCAN epsilon distance in meters (default: 300)
 - `--shrink_distance`: Negative buffer distance in meters (default: 30)
 
+### Non-Overlapping Progression Parameters
+- `--non_overlapping`: Generate non-overlapping progression (useful for print layouts)
+- `--min_area_non_overlapping`: Minimum area in hectares for non-overlapping polygons (default: 0.5)
+
 ### Processing Flags
 - `--no_cumulative`: Disable cumulative progression
 - `--no_hourly`: Disable hourly progression  
@@ -127,6 +154,12 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_fil
 - `{prefix}_daily_cumulative_calibrated.gpkg` - Calibrated daily summary (if calibration applied)
 - `{prefix}_daily_hourly_calibrated.gpkg` - Calibrated daily summary (if calibration applied)
 
+### Non-Overlapping Progression Files
+- `{prefix}_non_overlapping_hourly_initial.gpkg` - Hourly non-overlapping progression (initial)
+- `{prefix}_non_overlapping_hourly_calibrated.gpkg` - Hourly non-overlapping progression (calibrated)
+- `{prefix}_daily_non_overlapping_initial.gpkg` - Daily non-overlapping summary (initial)
+- `{prefix}_daily_non_overlapping_calibrated.gpkg` - Daily non-overlapping summary (calibrated)
+
 ### Data Structure
 Files contain:
 - `fire_id`: Fire identifier
@@ -142,6 +175,11 @@ Files contain:
 - `data_status`: Data origin ('original', 'filled')
 - `shrink_applied`: Whether negative buffer was applied
 - `shrink_distance_m`: Shrink distance in meters
+
+### Non-Overlapping Specific Fields
+- `area_ha_new`: New area burned in this time step (hectares)
+- `area_ha_cumulative`: Total cumulative area up to this time step
+- `progression_type`: 'non_overlapping' or 'daily_non_overlapping'
 
 ## 🔧 Processing Details
 
@@ -163,7 +201,13 @@ Files contain:
    - Positive buffer for smoothing
    - Negative buffer for area correction
 
-4. **Calibration**:
+4. **Non-Overlapping Progression**:
+   - Calculate geometric difference between consecutive time steps
+   - Show only new burned areas for each hour
+   - Apply minimum area filter (default: 0.5 ha)
+   - Create daily summaries of new burned areas
+
+5. **Calibration**:
    - Compare with reference burned areas
    - Calculate overestimation ratios
    - Suggest optimal shrink distance
@@ -177,6 +221,15 @@ The calibration system:
 - Heuristic: 10 meters shrink per 10% overestimation
 - Limits suggested shrink between 20-80 meters
 
+### Non-Overlapping Progression
+
+The non-overlapping progression:
+- Shows only the **new area burned** in each time step
+- Ideal for print layouts and progression visualization
+- Filters out small polygons (< 0.5 ha by default)
+- Maintains temporal sequence without overlaps
+- Provides cleaner visualization of fire spread patterns
+
 ## 💡 Usage Tips
 
 ### For Best Results
@@ -187,12 +240,12 @@ The calibration system:
 - Use projected CRS (meters) for accurate distance calculations
 - Clean invalid geometries before processing
 
-
 **Parameter Tuning:**
 - Start with `ratio=0.08` and adjust based on point density
 - Use `adaptive` FRP threshold for datasets with varying fire intensities
 - Set `min_cluster_size=2` for detecting small fires
 - Increase `density_eps` for more dispersed fire patterns
+- Use `min_area_non_overlapping=1.0` for cleaner print layouts
 
 **Memory Management:**
 - Process large datasets in batches by fire_id
@@ -210,7 +263,12 @@ The calibration system:
    - Use cumulative version with `datetime_hour` or `datetime_display` for temporal animation using QGIS Temporal Controller Panel
    - Daily summaries provide cleaner animation frames for large time frames
 
-3. **Analysis**:
+3. **Print Layouts**:
+   - Use **non-overlapping progression** for clear progression maps
+   - Each time step shows only new burned area
+   - Perfect for static maps showing fire spread sequence
+
+4. **Analysis**:
    - Hourly version for detailed temporal analysis
    - Compare calibrated vs initial versions for accuracy assessment
    - Intersect with reference data to get better statistics and make it closer to the reality
@@ -239,6 +297,11 @@ The calibration system:
 - Check input data temporal continuity
 - Verify timezone handling
 
+**Too many small polygons in non-overlapping output:**
+- Increase `min_area_non_overlapping` (try 1.0 or 2.0 ha)
+- Check if `shrink_distance` is appropriate
+- Verify FRP filtering thresholds
+
 ### Performance Optimization
 
 **For large datasets:**
@@ -259,11 +322,23 @@ python mtg_frp_fire_progression.py --input precise_data.gpkg --output_prefix pre
     --reference_areas high_quality_reference.gpkg
 ```
 
+**For print-ready progression maps:**
+```bash
+# Generate clean non-overlapping progression
+python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix print_ready \
+    --non_overlapping \
+    --min_area_non_overlapping 1.0 \
+    --buffer_distance 80 \
+    --shrink_distance 40
+```
+
 ## 📝 Complete Workflow Example
 
 ```bash
-# 1. Process with calibration
-python mtg_frp_fire_progression.py --input mtg_frp_data.gpkg --output_prefix fire_progression --reference_areas sentinel2_burned_areas.gpkg
+# 1. Process with calibration and non-overlapping progression
+python mtg_frp_fire_progression.py --input mtg_frp_data.gpkg --output_prefix fire_progression \
+    --non_overlapping \
+    --reference_areas sentinel2_burned_areas.gpkg
 
 # 2. Analyze results in QGIS
 # Files: fire_progression_*.gpkg
@@ -273,6 +348,9 @@ python mtg_frp_fire_progression.py --input mtg_frp_data.gpkg --output_prefix fir
 
 # 4. Create temporal animation
 # Use cumulative_calibrated with datetime_hour or datetime_display for animation
+
+# 5. Create print layouts
+# Use non_overlapping_hourly_calibrated for clear progression maps
 ```
 
 ## 🔒 Data Requirements

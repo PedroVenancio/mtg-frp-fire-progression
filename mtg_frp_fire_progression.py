@@ -11,6 +11,193 @@ import argparse
 import os
 import sys
 
+def create_non_overlapping_progression(progression_gdf, fire_id_column='fire_id', min_area_ha=0.5):
+    """
+    Create non-overlapping fire progression polygons where each hour shows only the NEW burned area.
+    This is useful for print layouts and progression visualization.
+    """
+    print("=== CREATING NON-OVERLAPPING PROGRESSION ===")
+    print(f"Minimum area filter: {min_area_ha} hectares")
+    
+    # Ensure data is sorted by fire_id and datetime
+    progression_gdf = progression_gdf.sort_values([fire_id_column, 'datetime_hour'])
+    
+    non_overlapping_results = []
+    
+    for fire_id in progression_gdf[fire_id_column].unique():
+        fire_data = progression_gdf[progression_gdf[fire_id_column] == fire_id].copy()
+        fire_data = fire_data.sort_values('datetime_hour')
+        
+        print(f"Processing fire {fire_id} with {len(fire_data)} time steps...")
+        
+        previous_geometry = None
+        polygons_created = 0
+        polygons_filtered = 0
+        
+        for idx, row in fire_data.iterrows():
+            current_geometry = row['geometry']
+            current_hour = row['datetime_hour']
+            current_display = row['datetime_display']
+            
+            # For the first hour, use the full geometry
+            if previous_geometry is None:
+                new_geometry = current_geometry
+            else:
+                # Calculate the difference: current - previous
+                try:
+                    if current_geometry.is_valid and previous_geometry.is_valid:
+                        new_geometry = current_geometry.difference(previous_geometry)
+                        
+                        # Handle cases where difference might create empty or invalid geometries
+                        if new_geometry.is_empty:
+                            # Skip this hour if no new area
+                            polygons_filtered += 1
+                            previous_geometry = current_geometry
+                            continue
+                    else:
+                        new_geometry = current_geometry
+                except Exception as e:
+                    print(f"  Error in geometry difference for fire {fire_id}, hour {current_hour}: {e}")
+                    new_geometry = current_geometry
+            
+            # Calculate area of the new geometry
+            if progression_gdf.crs and progression_gdf.crs.is_projected:
+                new_area_ha = new_geometry.area / 10000
+            else:
+                new_area_ha = new_geometry.area * 111.32 * 111.32 * 100
+            
+            # Apply minimum area filter
+            if new_area_ha < min_area_ha:
+                polygons_filtered += 1
+                previous_geometry = current_geometry
+                continue
+            
+            # Create result record
+            result = {
+                'fire_id': fire_id,
+                'datetime_hour': current_hour,
+                'datetime_display': current_display,
+                'geometry': new_geometry,
+                'area_ha_new': new_area_ha,
+                'area_ha_cumulative': row['area_ha'],
+                'n_points_cumulative': row.get('n_points_cumulative', row.get('n_points', 0)),
+                'frp_cumulative': row.get('frp_cumulative', row.get('frp', 0)),
+                'hull_type': row.get('hull_type', 'unknown'),
+                'data_status': row.get('data_status', 'original'),
+                'progression_type': 'non_overlapping'
+            }
+            
+            non_overlapping_results.append(result)
+            previous_geometry = current_geometry
+            polygons_created += 1
+        
+        print(f"  Fire {fire_id}: {polygons_created} non-overlapping polygons created, {polygons_filtered} filtered out (area < {min_area_ha} ha)")
+    
+    if not non_overlapping_results:
+        print("No non-overlapping polygons were created.")
+        return None
+    
+    non_overlapping_gdf = gpd.GeoDataFrame(non_overlapping_results, crs=progression_gdf.crs)
+    
+    # Additional filter for zero or negative area (shouldn't happen after min_area filter, but just in case)
+    original_count = len(non_overlapping_gdf)
+    non_overlapping_gdf = non_overlapping_gdf[non_overlapping_gdf['area_ha_new'] > 0]
+    filtered_count = len(non_overlapping_gdf)
+    
+    if filtered_count < original_count:
+        print(f"Additional filtering: {original_count - filtered_count} polygons with zero/negative area removed")
+    
+    print(f"Non-overlapping progression created: {len(non_overlapping_gdf)} polygons (min area: {min_area_ha} ha)")
+    
+    return non_overlapping_gdf
+
+def create_daily_non_overlapping(non_overlapping_gdf, min_area_ha=0.5):
+    """
+    Create daily summary from non-overlapping hourly progression.
+    Each day shows the union of all new areas from that day.
+    """
+    print("=== CREATING DAILY NON-OVERLAPPING SUMMARY ===")
+    print(f"Minimum area filter: {min_area_ha} hectares")
+    
+    # Ensure UTC timezone
+    for col in ['datetime_hour']:
+        if col in non_overlapping_gdf.columns and non_overlapping_gdf[col].dt.tz is None:
+            non_overlapping_gdf[col] = non_overlapping_gdf[col].dt.tz_localize('UTC')
+    
+    # Create date column
+    non_overlapping_gdf['date'] = non_overlapping_gdf['datetime_hour'].dt.date
+    
+    daily_results = []
+    days_created = 0
+    days_filtered = 0
+    
+    for fire_id in non_overlapping_gdf['fire_id'].unique():
+        fire_data = non_overlapping_gdf[non_overlapping_gdf['fire_id'] == fire_id]
+        
+        for date in fire_data['date'].unique():
+            daily_data = fire_data[fire_data['date'] == date]
+            
+            if len(daily_data) == 0:
+                continue
+            
+            # Union all new geometries from this day
+            daily_geometries = daily_data['geometry'].tolist()
+            
+            try:
+                daily_union = unary_union(daily_geometries)
+                
+                # Skip if union resulted in empty geometry
+                if daily_union.is_empty:
+                    days_filtered += 1
+                    continue
+                
+                # Calculate daily area
+                if non_overlapping_gdf.crs and non_overlapping_gdf.crs.is_projected:
+                    daily_area_ha = daily_union.area / 10000
+                else:
+                    daily_area_ha = daily_union.area * 111.32 * 111.32 * 100
+                
+                # Apply minimum area filter
+                if daily_area_ha < min_area_ha:
+                    days_filtered += 1
+                    continue
+                
+                # Get the last record of the day for other attributes
+                last_record = daily_data.iloc[-1]
+                
+                # Create date fields
+                date_start = pd.to_datetime(date).tz_localize('UTC')
+                date_reference = date_start + timedelta(hours=23, minutes=59, seconds=59)
+                
+                daily_results.append({
+                    'fire_id': fire_id,
+                    'date': date_start,
+                    'date_reference': date_reference,
+                    'geometry': daily_union,
+                    'daily_area_ha': daily_area_ha,
+                    'cumulative_area_ha': last_record['area_ha_cumulative'],
+                    'n_hours': len(daily_data),
+                    'total_frp': last_record['frp_cumulative'],
+                    'progression_type': 'daily_non_overlapping'
+                })
+                
+                days_created += 1
+                
+            except Exception as e:
+                print(f"Error creating daily union for fire {fire_id}, date {date}: {e}")
+                days_filtered += 1
+                continue
+    
+    if not daily_results:
+        print("No daily non-overlapping polygons were created.")
+        return None
+    
+    daily_gdf = gpd.GeoDataFrame(daily_results, crs=non_overlapping_gdf.crs)
+    
+    print(f"Daily non-overlapping summary created: {days_created} polygons, {days_filtered} filtered out (area < {min_area_ha} ha)")
+    
+    return daily_gdf
+
 def create_hourly_fire_progression(gdf, fire_id_column='fire_id', buffer_distance=100, 
                                   cumulative=True, min_frp=None, ratio=0.1, use_end_hour=True,
                                   fill_missing_hours=True, frp_threshold_method='fixed',
@@ -666,12 +853,20 @@ def main():
     parser.add_argument('--density_eps', type=float, default=300, help='DBSCAN epsilon distance in meters (default: 300)')
     parser.add_argument('--shrink_distance', type=float, default=30, help='Negative buffer distance in meters (default: 30)')
     
+    # NEW: Minimum area threshold for non-overlapping polygons
+    parser.add_argument('--min_area_non_overlapping', type=float, default=0.5,
+                       help='Minimum area in hectares for non-overlapping polygons (default: 0.5)')
+    
     # Boolean flags
     parser.add_argument('--no_cumulative', action='store_true', help='Disable cumulative progression')
     parser.add_argument('--no_hourly', action='store_true', help='Disable hourly progression')
     parser.add_argument('--no_fill_missing', action='store_true', help='Disable filling missing hours')
     parser.add_argument('--no_density_filter', action='store_true', help='Disable density filtering')
     parser.add_argument('--use_start_hour', action='store_true', help='Use start hour instead of end hour')
+    
+    # NEW: Non-overlapping progression option
+    parser.add_argument('--non_overlapping', action='store_true', 
+                       help='Generate non-overlapping progression (useful for print layouts)')
     
     # Calibration
     parser.add_argument('--reference_areas', help='Reference areas file for calibration')
@@ -703,13 +898,14 @@ def main():
     fill_missing = not args.no_fill_missing
     use_density_filter = not args.no_density_filter
     use_end_hour = not args.use_start_hour
+    process_non_overlapping = args.non_overlapping
     
     results = {}
     
     # 2. INITIAL PROCESSING OF BOTH VERSIONS
     print("\n2. Initial processing of versions...")
     
-    # 2.1 CUMULATIVE VERSION (for animation)
+    # 2.1 CUMULATIVE VERSION (for animation and non-overlapping)
     if process_cumulative:
         print("\n2.1 Generating initial CUMULATIVE progression...")
         progression_cumulative_initial = create_hourly_fire_progression(
@@ -860,8 +1056,47 @@ def main():
             print(f"\n*** ERROR in calibration: {e} ***")
             print("   Continuing with initial results...")
     
-    # 5. CREATE DAILY SUMMARIES FOR ALL VERSIONS
-    print("\n5. Creating daily summaries...")
+    # 5. CREATE NON-OVERLAPPING PROGRESSION (NEW FEATURE)
+    if process_non_overlapping and process_cumulative:
+        print("\n5. Creating non-overlapping progression...")
+        
+        # Use calibrated version if available, otherwise initial
+        if calibration_applied and 'cumulative_calibrated' in results:
+            cumulative_gdf = results['cumulative_calibrated']
+            calibrated_suffix = "_calibrated"
+        else:
+            cumulative_gdf = results['cumulative_initial']
+            calibrated_suffix = "_initial"
+        
+        # 5.1 Create hourly non-overlapping progression
+        non_overlapping_hourly = create_non_overlapping_progression(
+            cumulative_gdf,
+            fire_id_column=args.fire_id_column,
+            min_area_ha=args.min_area_non_overlapping
+        )
+        
+        if non_overlapping_hourly is not None:
+            results['non_overlapping_hourly'] = non_overlapping_hourly
+            output_file = f"{args.output_prefix}_non_overlapping_hourly{calibrated_suffix}.gpkg"
+            non_overlapping_hourly.to_file(output_file, driver='GPKG')
+            print(f"   Non-overlapping hourly progression saved: {output_file}")
+            
+            # 5.2 Create daily non-overlapping summary
+            daily_non_overlapping = create_daily_non_overlapping(
+                non_overlapping_hourly,
+                min_area_ha=args.min_area_non_overlapping
+            )
+            
+            if daily_non_overlapping is not None:
+                results['daily_non_overlapping'] = daily_non_overlapping
+                output_file = f"{args.output_prefix}_daily_non_overlapping{calibrated_suffix}.gpkg"
+                daily_non_overlapping.to_file(output_file, driver='GPKG')
+                print(f"   Daily non-overlapping summary saved: {output_file}")
+        else:
+            print("   ERROR: No non-overlapping polygons were created")
+    
+    # 6. CREATE DAILY SUMMARIES FOR ALL VERSIONS
+    print("\n6. Creating daily summaries...")
     
     if process_cumulative and 'cumulative_initial' in results:
         daily_summary_cumulative = create_daily_summary(results['cumulative_initial'])
@@ -885,11 +1120,14 @@ def main():
             daily_summary_hourly.to_file(output_file, driver='GPKG')
             print(f"   Initial hourly daily summary saved: {output_file}")
     
-    # 6. FINAL STATISTICS
-    print("\n6. FINAL STATISTICS:")
+    # 7. FINAL STATISTICS
+    print("\n7. FINAL STATISTICS:")
     print(f"   Total fires processed: {gdf[args.fire_id_column].nunique()}")
     print(f"   Shrink_distance applied: {calibration_shrink} meters")
     print(f"   Calibration applied: {'YES' if calibration_applied else 'NO'}")
+    print(f"   Non-overlapping progression: {'YES' if process_non_overlapping else 'NO'}")
+    if process_non_overlapping:
+        print(f"   Minimum area for non-overlapping: {args.min_area_non_overlapping} ha")
     
     if process_cumulative and 'cumulative_initial' in results:
         gdf_cumulative = results['cumulative_calibrated'] if calibration_applied else results['cumulative_initial']
@@ -911,6 +1149,17 @@ def main():
         gdf_hourly = results['hourly_calibrated'] if calibration_applied else results['hourly_initial']
         print(f"\n   HOURLY VERSION:")
         print(f"   - Hourly polygons: {len(gdf_hourly)}")
+    
+    if process_non_overlapping and 'non_overlapping_hourly' in results:
+        gdf_non_overlapping = results['non_overlapping_hourly']
+        print(f"\n   NON-OVERLAPPING VERSION:")
+        print(f"   - Hourly polygons: {len(gdf_non_overlapping)}")
+        
+        if len(gdf_non_overlapping) > 0:
+            avg_new_area = gdf_non_overlapping['area_ha_new'].mean()
+            max_new_area = gdf_non_overlapping['area_ha_new'].max()
+            print(f"   - Average new area per hour: {avg_new_area:.1f} ha")
+            print(f"   - Maximum new area in one hour: {max_new_area:.1f} ha")
     
     print(f"\n=== PROCESSING COMPLETED SUCCESSFULLY ===")
     print(f"Generated files with prefix: {args.output_prefix}")
