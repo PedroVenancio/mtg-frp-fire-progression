@@ -4,6 +4,8 @@ Python script for create hourly and cumulative fire progression polygons from MT
 
 https://github.com/user-attachments/assets/198a031a-720d-4a23-9ee9-2cea6e173c95
 
+![Fire_Intensity](https://github.com/user-attachments/assets/f30c0364-130b-40cd-a345-0fc484331702)
+
 ## 📋 Description
 
 This script processes MTFRPPixel fire detection data to create temporal progression polygons of wildfires. It supports both cumulative and hourly progression modes, with advanced filtering, calibration capabilities, and now includes **fire intensity estimation** using radiative fraction approach.
