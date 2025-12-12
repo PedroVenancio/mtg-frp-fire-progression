@@ -4,7 +4,14 @@ Python script for create hourly and cumulative fire progression polygons from MT
 
 https://github.com/user-attachments/assets/198a031a-720d-4a23-9ee9-2cea6e173c95
 
+   - **Fire Intensity based on Radiative Method**: I_rad = FRP / (L × X_r)
+
 ![Fire_Intensity](https://github.com/user-attachments/assets/f30c0364-130b-40cd-a345-0fc484331702)
+
+   - **Fire Intensity based on Traditional Method**: I_trad = H × w × v
+
+![Fire_Intensity_Byram](https://github.com/user-attachments/assets/00306d45-7eb2-4f1d-bfd5-cca42bc53648)
+
 
 ## 📋 Description
 
