@@ -62,11 +62,6 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix frp_fi
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix calibrated_frp_fires --reference_areas reference_burned_areas.gpkg
 ```
 
-**Process with non-overlapping progression - ative by default (ideal for print layouts):**
-```bash
-python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix with_overlap
-```
-
 **Process without non-overlapping progression:**
 ```bash
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_overlap --no_non_overlapping
@@ -551,4 +546,4 @@ For issues and questions:
 
 ---
 
-**Notes**: This tool is designed to work with MTG FRP data but can be adapted for other fire detection datasets with similar structure. The intensity calculation methods are based on literature but have several assumptions that need to be validated for different fire regimes. As so, a intensidade should be considered initial estimations to compare diferent wildfires.
+**Notes**: This tool is designed to work with MTG FRP data but can be adapted for other fire detection datasets with similar structure. The intensity calculation methods are based on literature but have several assumptions that need to be validated for different fire regimes. As so, intensity values should be considered initial estimations to compare diferent wildfires.
