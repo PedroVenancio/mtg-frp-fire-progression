@@ -1406,7 +1406,9 @@ def calculate_byram_with_radiative_fraction(progression_gdf, speed_df, frp_new_a
     frp_new_area_df : DataFrame
         FRP values calculated only within new burned areas
     radiative_fraction : float, optional
-        Radiative fraction X_r (default: 0.15, range: 0.15-0.20)
+        Radiative fraction X_r (default: 0.15; typical range: 0.15-0.20)
+    heat_value : float, optional
+        Heat content in kJ/kg for traditional Byram intensity calculation (default: 20000; typical range: 15000-21000 kJ/kg)
     fuel_consumption : float, optional
         Fixed fuel consumption in kg/m². If None, uses speed-adjusted values
     mtg_correction : float, optional
