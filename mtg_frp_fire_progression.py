@@ -2073,7 +2073,7 @@ def main():
     parser.add_argument('--calculate_intensity', action='store_true',
                    help='Calculate Byram fire intensity (propagation speed and FRP in new area)')
     parser.add_argument('--radiative_fraction', type=float, default=0.15,
-                   help='Radiative fraction for Byram calculation. Xr = 0.15-0.20 for wildfires (Wooster et al., 2005; Johnston et al., 2017) (default: 0.15)')
+                   help='Radiative fraction for Byram calculation. Xr = 0.15-0.20 for wildfires (Johnston et al., 2017) (default: 0.15)')
     parser.add_argument('--heat_value', type=float, default=20000,
                    help='Heat content in kJ/kg for traditional Byram intensity calculation (default: 20000 - Average from portuguese fuel models (Fernandes et al.))')
     parser.add_argument('--fuel_consumption', type=float, default=None,

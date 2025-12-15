@@ -564,10 +564,9 @@ For issues and questions:
 - [MTG Mission Overview](https://www.eumetsat.int/meteosat-third-generation)
 
 ### Intensity Calculation
-- **Byram, G. M. (1959)**: Combustion of forest fuels. In: K. P. Davis (Editor), Forest fire control and use. McGraw-Hill, New York, pp. 61–89.
-- **Wooster, M. J., Roberts, G., Freeborn, P. H., et al. (2005)**: Satellite remote sensing of fire radiative power for estimation of wildfire carbon flux and fuel consumption.
-- **Johnston, J. M., Smith, A. M. S., & Wooster, M. J. (2017)**: Direct estimation of Byram’s fire intensity from infrared remote sensing imagery.
-- **Fernandes, P., Loureiro, C. (2021)**: Modelos de combustível florestal para Portugal. Documento de referência, versão de 2021.
+- [**Byram, G. M. (1959)**: Combustion of forest fuels. In: K. P. Davis (Editor), Forest fire control and use. McGraw-Hill, New York, pp. 61–89.](https://www.frames.gov/catalog/9652)
+- [**Johnston, J. M., Smith, A. M. S., & Wooster, M. J. (2017)**: Direct estimation of Byram’s fire intensity from infrared remote sensing imagery.](https://www.researchgate.net/publication/318028643_Direct_estimation_of_Byram's_fire_intensity_from_infrared_remote_sensing_imagery)
+- [**Fernandes, P., Loureiro, C. (2021)**: Modelos de combustível florestal para Portugal. Documento de referência, versão de 2021.](https://www.researchgate.net/publication/357812218_Modelos_de_combustivel_florestal_para_Portugal_-_Documento_de_referencia_versao_de_2021)
 
 ### GIS Integration
 - [QGIS Documentation](https://qgis.org/resources/hub/)
