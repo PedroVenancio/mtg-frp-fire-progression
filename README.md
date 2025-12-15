@@ -1,6 +1,6 @@
-# MTG FRP Fire Progression Analyzer with Intensity Calculation
+# MTG FRP Fire Progression Analyzer with Intensity Estimation
 
-Python script for create hourly and cumulative fire progression polygons from MTG (Meteosat Third Generation) FRP (Fire Radiative Power) data, with calibration against reference burned areas and fire intensity estimation.
+A Python script for creating hourly and cumulative fire progression polygons from MTG (Meteosat Third Generation) FRP (Fire Radiative Power) data, with calibration against reference burned areas and fire intensity estimation.
 
 https://github.com/user-attachments/assets/198a031a-720d-4a23-9ee9-2cea6e173c95
 
