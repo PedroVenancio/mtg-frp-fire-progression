@@ -15,7 +15,7 @@ https://github.com/user-attachments/assets/198a031a-720d-4a23-9ee9-2cea6e173c95
 
 ## 📋 Description
 
-This script processes MTFRPPixel fire detection data to create temporal progression polygons of wildfires. It supports both cumulative and hourly progression modes, with advanced filtering, calibration capabilities, and now includes **fire intensity estimation** using radiative fraction approach.
+This script processes MTFRPPixel fire detection data to **create temporal progression polygons of wildfires**. It supports both **cumulative and hourly progression** modes, with advanced filtering, calibration capabilities, and now includes **fire intensity estimation** using radiative fraction approach.
 
 ## ✨ Features
 
@@ -57,14 +57,9 @@ cd mtg-fire-progression
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix frp_fires
 ```
 
-**Process with calibration using reference areas:**
+**Process with calibration using reference burned areas:**
 ```bash
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix calibrated_frp_fires --reference_areas reference_burned_areas.gpkg
-```
-
-**Process without non-overlapping progression:**
-```bash
-python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_overlap --no_non_overlapping
 ```
 
 **Process only cumulative progression:**
@@ -72,9 +67,24 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_ove
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix cumulative_only --no_hourly
 ```
 
+**Process without non-overlapping progression:**
+```bash
+python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_overlap --no_non_overlapping
+```
+
+**Adaptive FRP filtering (keep only top 85% of FRP values):**
+```bash
+python mtg_frp_fire_progression.py --input fire_data.gpkg --frp_threshold_method adaptive --frp_quantile_threshold 0.15
+```
+
+**Fixed FRP threshold (keep only FRP ≥ 20 MW):**
+```bash
+python mtg_frp_fire_progression.py --input fire_data.gpkg --frp_threshold_method fixed --min_frp 20
+```
+
 **Custom FRP filtering and clustering:**
 ```bash
-python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix custom --min_frp 15 --min_cluster_size 5 --density_eps 500
+python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix custom --frp_threshold_method fixed --min_frp 15 --min_cluster_size 5 --density_eps 500
 ```
 
 ### Advanced Examples with Intensity Calculation
@@ -84,7 +94,7 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix custom
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix fire_intensity --calculate_intensity
 ```
 
-**Calculate intensity with custom radiative fraction and fuel type:**
+**Calculate intensity with custom radiative fraction (0.17), mtg_correction (0.65) and fuel type (forest):**
 ```bash
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix custom_intensity \
     --calculate_intensity \
@@ -93,22 +103,23 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix custom
     --mtg_correction 0.65
 ```
 
-**Complete workflow with calibration and intensity:**
-```bash
-python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix complete_analysis \
-    --calculate_intensity \
-    --reference_areas reference_burned_areas.gpkg \
-    --radiative_fraction 0.15 \
-    --fuel_type shrub \
-    --min_area_non_overlapping 0.5
-```
-
-**Custom minimum area non-overlapping with intensity visualization:**
+**Custom minimum area non-overlapping (1 ha) with intensity calculation:**
 ```bash
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix intensity_print \
-    --calculate_intensity \
     --min_area_non_overlapping 1.0 \
+    --calculate_intensity \
     --radiative_fraction 0.16
+```
+
+**Complete workflow with calibration and intensity calculation:**
+```bash
+python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix complete_analysis \
+    --reference_areas reference_burned_areas.gpkg \
+    --min_area_non_overlapping 0.5 \
+    --calculate_intensity \
+    --radiative_fraction 0.15 \
+    --heat_value 18000 \
+    --fuel_type shrub
 ```
 
 ### Advanced Examples
@@ -127,7 +138,7 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix tuned 
 ```bash
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix complete \
     --reference_areas reference_burned_areas.gpkg \
-    --min_area_non_overlapping 0.5 \
+    --min_area_non_overlapping 1.0 \
     --buffer_distance 80 \
     --shrink_distance 30
 ```
@@ -158,11 +169,25 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_fil
 ### Core Processing Parameters
 - `--fire_id_column`: Column identifying each fire (default: 'fire_id')
 - `--buffer_distance`: Buffer distance in meters (default: 80)
-- `--min_frp`: Minimum FRP value for filtering (default: 10)
 - `--ratio`: Concave hull ratio parameter 0-1 (default: 0.08)
 - `--min_cluster_size`: Minimum cluster size for polygons (default: 3)
 - `--density_eps`: DBSCAN epsilon distance in meters (default: 300)
 - `--shrink_distance`: Negative buffer distance in meters (default: 30)
+
+### FRP Filtering Parameters:
+- `--frp_threshold_method`: FRP threshold method: 'fixed' or 'adaptive' (default: adaptive)
+- `--min_frp`: Minimum FRP value for filtering (default: 10)
+- `--frp_quantile_threshold`: Quantile for adaptive FRP threshold (default: 0.15)
+
+FRP filtering uses mutually exclusive parameters depending on the method:
+- When using `--frp_threshold_method adaptive` (default):
+  - Uses only `--frp_quantile_threshold` (default: 0.15 = 15th percentile)
+  - Ignores `--min_frp` completely
+  - Example: `--frp_threshold_method adaptive --frp_quantile_threshold 0.2` (keep top 80% of FRP values)
+- When using `--frp_threshold_method fixed`:
+  - Uses only `--min_frp` (default: 10.0 MW)
+  - Ignores `--frp_quantile_threshold` completely
+  - Example: `--frp_threshold_method fixed --min_frp 15` (keep FRP ≥ 15 MW)
 
 ### Non-Overlapping Progression Parameters
 - `--no_non_overlapping`: Disable non-overlapping progression (enabled by default)
@@ -171,6 +196,7 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_fil
 ### Byram Intensity Parameters (NEW)
 - `--calculate_intensity`: Calculate Byram fire intensity (propagation speed and FRP in new area)
 - `--radiative_fraction`: Radiative fraction for Byram intensity calculation. Xr = 0.15-0.20 for wildfires (based on Wooster et al., 2005; Johnston et al., 2017) (default: 0.15)
+- `--heat_value`: Heat content in kJ/kg for traditional Byram intensity calculation (default: 20000, average for portuguese fuel models (Fernandes et al.). Typical range 15000-21000 kJ/kg)
 - `--fuel_consumption`: Fixed fuel consumption in kg/m². If None, uses speed-adjusted values (default: None)
 - `--fuel_type`: Fuel type for continuous consumption model: 'grass', 'shrub', or 'forest' (default: shrub)
 - `--mtg_correction`: Correction factor for MTG 1km resolution artifacts. Typical values: 0.6-0.7. Lower values reduce L more aggressively (default: 0.6)
@@ -185,8 +211,6 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix no_fil
 ### Calibration Parameters
 - `--reference_areas`: Reference burned areas file for calibration
 - `--skip_calibration`: Skip calibration even if reference areas provided
-- `--frp_threshold_method`: FRP threshold method: 'fixed' or 'adaptive' (default: adaptive)
-- `--frp_quantile_threshold`: Quantile for adaptive FRP threshold (default: 0.15)
 
 ## 🗂️ Output Structure
 
@@ -232,6 +256,11 @@ Files contain:
 - `shrink_applied`: Whether negative buffer was applied
 - `shrink_distance_m`: Shrink distance in meters
 
+### Non-Overlapping Specific Fields
+- `area_ha_new`: New area burned in this time step (hectares)
+- `area_ha_cumulative`: Total cumulative area up to this time step
+- `progression_type`: 'non_overlapping' or 'daily_non_overlapping'
+
 ### NEW: Byram Intensity Fields
 - `propagation_distance_m`: 90th percentile propagation distance (meters) - robust metric
 - `propagation_distance_max_m`: Maximum propagation distance (meters) - absolute maximum
@@ -241,6 +270,7 @@ Files contain:
 - `fire_front_length_m`: Fire front length with MTG correction (meters)
 - `frp_new_area_mw`: FRP in new burned area only (MW)
 - `n_points_new_area`: Number of FRP points in new area
+- `heat_value_kj_kg`: Heat content used in calculation (from --heat_value parameter)
 - `byram_radiative_intensity_kw_m`: Radiative Byram intensity (kW/m) - I = FRP/(L×Xr)
 - `byram_traditional_intensity_kw_m`: Traditional Byram intensity (kW/m) - I = H×w×v
 - `radiative_efficiency`: Ratio radiative/traditional intensity (validation metric)
@@ -248,11 +278,6 @@ Files contain:
 - `intensity_class`: Radiative intensity classification
 - `traditional_intensity_class`: Traditional intensity classification
 - `adjusted_fuel_consumption_kg_m2`: Speed-adjusted fuel consumption
-
-### Non-Overlapping Specific Fields
-- `area_ha_new`: New area burned in this time step (hectares)
-- `area_ha_cumulative`: Total cumulative area up to this time step
-- `progression_type`: 'non_overlapping' or 'daily_non_overlapping'
 
 ## 🔧 Processing Details
 
@@ -317,7 +342,7 @@ I_trad = H × w × v
 ```
 Where:
 - `I_trad` = Traditional Byram intensity (kW/m)
-- `H` = Heat content (20,000 kJ/kg for Mediterranean fuels)
+- `H` = Heat content (20000 kJ/kg for Mediterranean fuels)
 - `w` = Fuel consumption (kg/m²) - speed-adjusted or fixed
 - `v` = Propagation speed (m/s)
 
@@ -358,7 +383,7 @@ To disable this feature, use: `--no_non_overlapping`
 - Clean invalid geometries before processing
 
 **Parameter Tuning:**
-- Start with `ratio=0.08` and adjust based on point density
+- Start with `ratio=0.08` (for concave hull) and adjust based on point density
 - Use `adaptive` FRP threshold for datasets with varying fire intensities
 - Set `min_cluster_size=2` for detecting small fires
 - Increase `density_eps` for more dispersed fire patterns
@@ -380,7 +405,7 @@ To disable this feature, use: `--no_non_overlapping`
 
 1. **Visualization**:
    - Style by `datetime_hour` or `datetime_display` for temporal visualization and animation 
-   - Use graduated symbols for `area_ha` or `byram_radiative_intensity_kw_m`
+   - Use graduated symbols for `area_ha`, `byram_radiative_intensity_kw_m`, `byram_traditional_intensity_kw_m`
    - Filter by `data_status` to identify filled hours
 
 2. **Animation**:
@@ -391,6 +416,7 @@ To disable this feature, use: `--no_non_overlapping`
    - Use **non-overlapping progression** for clear progression maps
    - Each time step shows only new burned area
    - Perfect for static maps showing fire spread sequence
+   - Color by time steps for hourly / daily progression
    - Color by intensity class for behavior analysis [Low (<500 kW/m); Moderate (500-2000 kW/m); 'High (2000-4000 kW/m)'; 'Very High (4000-10.000 kW/m)'; 'Extreme (>10.000 kW/m)']
 
 4. **Analysis**:
@@ -467,11 +493,12 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix print_
 ```bash
 # Generate complete intensity analysis
 python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix behavior \
+    --reference_areas reference_burned_areas.gpkg \
     --calculate_intensity \
     --radiative_fraction 0.16 \
     --fuel_type forest \
     --mtg_correction 0.65 \
-    --reference_areas reference_burned_areas.gpkg
+    --heat_value 19000
 ```
 
 ## 📝 Complete Workflow Example
@@ -479,29 +506,31 @@ python mtg_frp_fire_progression.py --input fire_data.gpkg --output_prefix behavi
 ```bash
 # 1. Process with calibration, non-overlapping, and intensity calculation
 python mtg_frp_fire_progression.py --input mtg_frp_data.gpkg --output_prefix fire_analysis \
-    --calculate_intensity \
     --reference_areas sentinel2_burned_areas.gpkg \
+    --calculate_intensity \
     --radiative_fraction 0.15 \
+    --heat_value 18000 \
     --fuel_type shrub \
     --mtg_correction 0.6
 
 # 2. Analyze results in QGIS
 # Files: fire_analysis_*.gpkg and fire_analysis_*.csv
 
-# 3. Compare intensity methods
+# 3. Analyze results in DBeaver / Calc
+# Files: fire_analysis_*.gpkg and fire_analysis_*.csv
+# Create graphs with hourly FRP and compare with fire weather indices and other metrics
+
+# 4. Compare intensity methods in QGIS
 # Open fire_analysis_non_overlapping_hourly_byram_improved_calibrated.gpkg
 # Compare byram_radiative_intensity_kw_m vs byram_traditional_intensity_kw_m
 # Check radiative_efficiency for validation
-
-# 4. Visualize propagation vectors
-# Open fire_analysis_propagation_vectors_90th_percentile.gpkg
 # Style by propagation_speed_kmh for rate of spread visualization
 
-# 5. Create temporal animation
+# 5. Create temporal animation in QGIS
 # Use _cumulative_calibrated outputs with datetime_hour for animation
 
-# 6. Create print layouts
-# Use non_overlapping_hourly_byram_improved_calibrated for intensity progression maps
+# 6. Create print layouts in QGIS
+# Use non_overlapping_hourly_byram_improved_calibrated for hourly / daily progression and intensity maps
 ```
 
 ## 🔒 Data Requirements
@@ -546,4 +575,7 @@ For issues and questions:
 
 ---
 
-**Notes**: This tool is designed to work with MTG FRP data but can be adapted for other fire detection datasets with similar structure. The intensity calculation methods are based on literature but have several assumptions that need to be validated for different fire regimes. As so, intensity values should be considered initial estimations to compare diferent wildfires.
+**Notes**: 
+- This tool is designed to work with MTG FRP data, but can be adapted for other fire detection datasets with similar structure. 
+- Intensity calculation methods are based on literature but have several assumptions that need to be validated for different fire regimes. `Byram Intensity Parameters` can be used to fine tune the outputs, using field observations or better fire behaviour data.
+- Fire intensity values should be considered initial estimations to identify different stages of fires during their lifespan and to compare the fire behaviour of diferent wildfires.

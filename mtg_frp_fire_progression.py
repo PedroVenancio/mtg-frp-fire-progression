@@ -218,11 +218,19 @@ def create_hourly_fire_progression(gdf, fire_id_column='fire_id', buffer_distanc
             # Adaptive threshold based on data quantile
             frp_threshold = gdf['FRP'].quantile(frp_quantile_threshold)
             print(f"Adaptive FRP threshold: {frp_threshold:.2f} (quantile {frp_quantile_threshold})")
+            # Warning: min_frp is ignored in adaptive mode
+            if min_frp != 10:  # When different from default
+                print(f"     Note: min_frp={min_frp} is IGNORED in adaptive mode")
+                print(f"     To use fixed threshold: --frp_threshold_method fixed")
             gdf = gdf[gdf['FRP'] >= frp_threshold].copy()
         else:
             # Fixed threshold
             gdf = gdf[gdf['FRP'] >= min_frp].copy()
             frp_threshold = min_frp
+            # Warning: frp_quantile_threshold is ignored in fixed mode
+            if frp_quantile_threshold != 0.15:  # When different from default
+                print(f"     Note: frp_quantile_threshold={frp_quantile_threshold} is IGNORED in fixed mode")
+            print(f"Fixed FRP threshold: {frp_threshold:.2f}")
         
         filtered_count = len(gdf)
         print(f"FRP filter: {filtered_count}/{original_count} points kept "
@@ -1369,6 +1377,7 @@ def calculate_frp_in_new_area(speed_df, frp_points_gdf, fire_id_column='fire_id'
 
 def calculate_byram_with_radiative_fraction(progression_gdf, speed_df, frp_new_area_df,
                                            radiative_fraction=0.15,
+                                           heat_value=20000,
                                            fuel_consumption=None,
                                            fuel_type='shrub',
                                            mtg_correction=0.6):
@@ -1408,7 +1417,11 @@ def calculate_byram_with_radiative_fraction(progression_gdf, speed_df, frp_new_a
     GeoDataFrame with Byram intensity columns added
     """
     print(f"\n=== CALCULATING BYRAM INTENSITY WITH RADIATIVE FRACTION {radiative_fraction} ===")
-    
+
+    print(f"   Heat content used: {heat_value} kJ/kg")
+    if heat_value != 20000:
+        print(f"   Note: Using custom heat content (default is 20000 kJ/kg)")
+
     # Merge all data sources
     # Include fire_front_length_m from speed_df (already calculated with MTG correction)
     merged_df = progression_gdf.merge(
@@ -1494,11 +1507,11 @@ def calculate_byram_with_radiative_fraction(progression_gdf, speed_df, frp_new_a
         merged_df['adjusted_fuel_consumption_kg_m2'] = fuel_consumption
         fuel_column = 'adjusted_fuel_consumption_kg_m2'
     
-    heat_value = 20000  # kJ/kg - Average from portuguese fuel models (Fernandes et al.)
-    
     merged_df['byram_traditional_intensity_kw_m'] = (
         heat_value * merged_df[fuel_column] * merged_df['propagation_speed_ms']
     )
+    
+    merged_df['heat_value_kj_kg'] = heat_value
     
     # CALCULATE RADIATIVE EFFICIENCY: ε = I_rad / I_trad
     merged_df['radiative_efficiency'] = 0.0
@@ -1605,6 +1618,7 @@ def calculate_byram_with_radiative_fraction(progression_gdf, speed_df, frp_new_a
     # Print comprehensive summary statistics for BOTH intensity methods
     print(f"\n   FINAL INTENSITY CALCULATION SUMMARY:")
     print(f"   Radiative fraction used: {radiative_fraction}")
+    print(f"   Heat content: {heat_value} kJ/kg")
     print(f"   Fuel consumption method: {'Speed-adjusted' if fuel_consumption is None else 'Fixed'}")
     print(f"   MTG correction factor: {mtg_correction}")
     
@@ -1940,6 +1954,7 @@ def create_non_overlapping_byram_intensity(non_overlapping_gdf, byram_gdf, fire_
         # FRP metrics
         'frp_new_area_mw', 'n_points_new_area',
         # Intensity
+        'heat_value_kj_kg',
         'byram_radiative_intensity_kw_m', 
         'byram_traditional_intensity_kw_m',
         'radiative_efficiency',
@@ -2059,6 +2074,8 @@ def main():
                    help='Calculate Byram fire intensity (propagation speed and FRP in new area)')
     parser.add_argument('--radiative_fraction', type=float, default=0.15,
                    help='Radiative fraction for Byram calculation. Xr = 0.15-0.20 for wildfires (Wooster et al., 2005; Johnston et al., 2017) (default: 0.15)')
+    parser.add_argument('--heat_value', type=float, default=20000,
+                   help='Heat content in kJ/kg for traditional Byram intensity calculation (default: 20000 - Average from portuguese fuel models (Fernandes et al.))')
     parser.add_argument('--fuel_consumption', type=float, default=None,
                    help='Fixed fuel consumption in kg/m². If None, uses speed-adjusted values (default: None)')
     parser.add_argument('--fuel_type', type=str, default='shrub',
@@ -2287,6 +2304,7 @@ def main():
             speed_df, 
             frp_new_area_df,
             radiative_fraction=args.radiative_fraction,
+            heat_value=args.heat_value,
             fuel_consumption=args.fuel_consumption,
             fuel_type=args.fuel_type,
             mtg_correction=args.mtg_correction
@@ -2321,6 +2339,7 @@ def main():
             # Fire front length
             'fire_front_length_m',
             # Intensity
+            'heat_value_kj_kg',
             'byram_radiative_intensity_kw_m', 'byram_traditional_intensity_kw_m',
             'radiative_efficiency', 'implied_radiative_fraction',
             # Classification
